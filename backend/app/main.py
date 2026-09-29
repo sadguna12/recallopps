@@ -1,11 +1,34 @@
+import os
+import sys
 from contextlib import asynccontextmanager
+
+# Add parent paths for resilient imports in both mono-repo and isolated service environments
+current_dir = os.path.dirname(__file__)
+backend_dir = os.path.abspath(os.path.join(current_dir, ".."))
+project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+
+for p in [project_root, backend_dir]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.app.config import settings
-from backend.app.database.session import init_db, SessionLocal
-from backend.app.api import api_router
-from backend.app.simulation.infrastructure import simulator
-from scripts.seed_data import seed_all
+
+try:
+    from backend.app.config import settings
+    from backend.app.database.session import init_db, SessionLocal
+    from backend.app.api import api_router
+    from backend.app.simulation.infrastructure import simulator
+    from scripts.seed_data import seed_all
+except ImportError:
+    from app.config import settings
+    from app.database.session import init_db, SessionLocal
+    from app.api import api_router
+    from app.simulation.infrastructure import simulator
+    try:
+        from scripts.seed_data import seed_all
+    except ImportError:
+        from app.seed_data import seed_all
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -16,7 +39,10 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         # Check if database needs seeding
-        from backend.app.models.incident import Incident
+        try:
+            from backend.app.models.incident import Incident
+        except ImportError:
+            from app.models.incident import Incident
         count = db.query(Incident).count()
         if count == 0:
             print("[Main] Database empty. Seeding historical incidents, runbooks, and postmortems...")
@@ -51,7 +77,10 @@ app.include_router(api_router)
 
 @app.get("/health")
 def health_check():
-    from backend.app.vectorstore.chroma_store import vector_store
+    try:
+        from backend.app.vectorstore.chroma_store import vector_store
+    except ImportError:
+        from app.vectorstore.chroma_store import vector_store
     return {
         "status": "healthy",
         "llm_provider": settings.LLM_PROVIDER,
