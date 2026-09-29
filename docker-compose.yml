@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: incident-agent-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./chroma_db:/app/chroma_db
+      - ./incident_agent.db:/app/incident_agent.db
+    environment:
+      - DATABASE_URL=sqlite:///./incident_agent.db
+      - CHROMA_PERSIST_DIR=./chroma_db
+      - LLM_PROVIDER=demo
+      - DEMO_MODE=true
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    container_name: incident-agent-frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://backend:8000
+    restart: unless-stopped
